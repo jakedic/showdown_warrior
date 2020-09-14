@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Challenges a player to a random battle when PM'd, or accepts any
-random battle challenge and runs the battles with other files
-in this repo. Partially stolen from showdown.py examples
+Challenges a player to a random battle when PM'd, or
+accepts any random battle challenge and runs Gen 1
+random battles with other files in this repo.
 """
 import showdown
 import asyncio
@@ -11,8 +11,13 @@ from pprint import pprint
 from battle_manager import Gen1Knight
 from os import path
 
+showdown.client.DEFAULT_RECONNECT_SLEEP = 2
+showdown.client.MAX_RECONNECT_SLEEP = 32
+
 class ChallengeClient(showdown.Client):
-    async def on_connect(self):
+    def __init__(self, training_mode, *args, **kwargs):
+        super(ChallengeClient, self).__init__(*args, **kwargs)
+        self.training_mode = training_mode
         self.warriors = dict()
         self.gen_1_team = ''
         self.ghost_team = ''
@@ -22,9 +27,15 @@ class ChallengeClient(showdown.Client):
         if path.exists('./data/mono-ghost.txt'):
             with open('./data/mono-ghost.txt', 'rt') as team2:
                 self.ghost_team = team2.read()
+
+
+    async def on_connect(self):
         await self.join('lobby')
         await asyncio.sleep(5)
-        #to-do make it look for in-progress battles and continue them
+
+        # in case of autoreconnect, resend last move
+        for room_id in self.warriors.keys():
+            await self.join(room_id)
 
         #uncomment below line to start searching on login
         #await self.search_battles('', 'gen1randombattle')
@@ -32,10 +43,9 @@ class ChallengeClient(showdown.Client):
         #uncomment below line to message user XX on init
         #await self.private_message('XX', 'hello there')
 
-        #uncomment below lines to run for 2 hours and then quit, also comment out room deinit
+        #uncomment below lines to not run for more than 2 hours after first connect
         await asyncio.sleep(7200)
         quit()
-
 
     async def on_private_message(self, pm):
         if pm.recipient == self:
@@ -67,7 +77,8 @@ class ChallengeClient(showdown.Client):
                 await room_obj.forfeit()
                 await room_obj.leave()
             else:
-                self.warriors[room_obj.id] = Gen1Knight(room_obj, self.name)
+                if room_obj.id not in self.warriors.keys():
+                    self.warriors[room_obj.id] = Gen1Knight(room_obj, self.name, self.training_mode)
                 # don't stay in any room longer than 15 minutes
                 await asyncio.sleep(900)
                 await room_obj.say('I gotta run.')
@@ -79,9 +90,16 @@ class ChallengeClient(showdown.Client):
             if inp_type == 'win':
                 await self.warriors[room_id].room_obj.leave()
 
-    #async def on_room_deinit(self, room_obj):
-        #user_inp = input('Do another battle (y/n)?').lower()
-        #if user_inp == 'y':
-        #    await self.search_battles('', 'gen1randombattle')
-        #else:
+    async def on_room_deinit(self, room_obj):
+        del self.warriors[room_obj.id]
+        #uncomment below lines to give the user a chance to exit on battle end
+        #user_inp = input('Do another battle / stay online (y/n)?').lower()
+        #if user_inp != 'y':
         #    quit()
+        #else:
+            #uncomment below to play another random battle on battle end
+            #await self.search_battles('', 'gen1randombattle')
+
+            #uncomment below line to message user XX on battle end
+            #await self.private_message('XX', 'hello there')
+        await asyncio.sleep(0)

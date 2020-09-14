@@ -14,7 +14,7 @@ from itertools import compress
 from general_poke_data import *
 
 class Gen1Thinker():
-	def __init__(self, training_mode=False):
+	def __init__(self, training_mode):
 		# figure out how to pass training_mode from start_warrior
 		self.training_mode = training_mode
 		self.turn_counter = 0
@@ -56,7 +56,7 @@ class Gen1Thinker():
 		return selection
 
 	def __get_possible_actions(self, is_forced_switch, is_forced_stay):
-		moves_selectable_list = map(lambda move: not 'pp' in move.keys() or move['pp'] !=  0 and not is_forced_switch, self.active_moves_list)
+		moves_selectable_list = map(lambda move: (not 'pp' in move.keys() or move['pp'] !=  0) and not is_forced_switch, self.active_moves_list)
 		usable_moves = compress(map(lambda move: move['move'], self.active_moves_list), moves_selectable_list)
 		usable_moves = map(lambda move: [False, move], usable_moves)
 
@@ -248,8 +248,9 @@ class Gen1Thinker():
 		self.__battle_metrics['exp_damage_received'].append(metrics_dict['exp_damage_received'])
 		self.__battle_metrics['predicted_npw_score'].append(metrics_dict['predicted_npw_score'])
 
-	def record_battle(self, knight_wins):
-		self.__battle_metrics['actual_npw_score'] = list(map(lambda turn: knight_wins / 1.1 ** (self.turn_counter - turn), self.__battle_metrics['turn']))
+	def record_battle(self, is_tie, knight_wins):
+		self.__battle_metrics['actual_npw_score'] = list(map(lambda turn: (knight_wins / 1.1 ** (self.turn_counter - turn)) / (is_tie + 1), self.__battle_metrics['turn']))
 		battle_frame = pd.DataFrame.from_dict(self.__battle_metrics)
 		all_battle_frame = pd.concat([battle_frame, self.__training_data], ignore_index=True, sort=False)
+		#could add option to not record bad battles (like early forfeits) on user input, but for now just manually edit data if needed
 		all_battle_frame.to_csv('./data/battle_records.csv', index=False)
